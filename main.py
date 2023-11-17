@@ -16,6 +16,17 @@ total_item_counter = Counter(
 
 app = setup_app()
 
+pipe = 0
+
+
+def before_req_func():
+    global pipe
+    pipe += 1
+    print("NEXT PIPE:", pipe)
+
+
+app.before_request(before_req_func)
+
 
 @app.route('/', methods=['GET'])
 def home():
