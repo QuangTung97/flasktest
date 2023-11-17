@@ -1,24 +1,18 @@
-import os
-
 from flask import Flask, jsonify
-from prometheus_client import multiprocess
-from prometheus_client.core import CollectorRegistry
+from prometheus_client import Counter
 from prometheus_flask_exporter import PrometheusMetrics
 
 
 def setup_app():
-    registry = CollectorRegistry()
-
-    p = os.environ.get('prometheus_multiproc_dir')
-    if not p:
-        raise ValueError('missing "prometheus_multiproc_dir" env variable')
-
-    multiprocess.MultiProcessCollector(registry, path=p)
-
     flask_app = Flask(__name__)
-    PrometheusMetrics(app=flask_app, registry=registry, group_by='url_rule', defaults_prefix='teko')
+    PrometheusMetrics(app=flask_app, group_by='url_rule', defaults_prefix='teko')
     return flask_app
 
+
+total_item_counter = Counter(
+    name='cache_counter', documentation='',
+    labelnames=['content', 'type'],
+)
 
 app = setup_app()
 
@@ -29,7 +23,10 @@ def home():
 
 
 @app.route('/users/<user_id>', methods=['GET'])
-def get_user(user_id: int):
+def get_user(user_id):
+    total_item_counter.labels('user', 'hit').inc()
+    if int(user_id) > 1000:
+        total_item_counter.labels('user', 'fill').inc()
     return jsonify({'data': f'User: {user_id}'})
 
 
