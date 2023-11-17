@@ -1,6 +1,6 @@
 .PHONY: run
 
 run:
+	rm -r /tmp/flask
 	mkdir -p /tmp/flask
-	rm /tmp/flask/*
-	PROMETHEUS_MULTIPROC_DIR=/tmp/flask gunicorn main:app --workers=2 --timeout=90
+	prometheus_multiproc_dir=/tmp/flask gunicorn main:app --workers=2
