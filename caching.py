@@ -3,7 +3,7 @@ from typing import TypeVar, List, Callable, Type
 import msgspec
 from memproxy import ItemCodec, Item, new_multi_get_filler
 
-from init_app import get_pipeline
+from init_app import get_pipeline, add_item_stats
 
 T = TypeVar('T')
 K = TypeVar('K')
@@ -32,11 +32,13 @@ def new_cache_item(
             fill_func=fill_func, get_key_func=get_key,
             default=default,
         )
-        return Item(
+        it = Item(
             pipe=get_pipeline(),
             key_fn=key_name,
             filler=filler,
             codec=codec
         )
+        add_item_stats(cls.__name__, it)
+        return it
 
     return new_func
