@@ -1,89 +1,20 @@
-import dataclasses
+import time
 from dataclasses import dataclass
 from typing import List
 
-import flask.json
-import flask_restplus
 import msgspec
-from flask import Flask, jsonify
+from flask import jsonify
 from flask_restplus import Resource
 from opentelemetry import trace
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-from opentelemetry.instrumentation.flask import FlaskInstrumentor
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource as OtelResource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_client import Counter
-from prometheus_flask_exporter import PrometheusMetrics
 
-
-def init_jaeger():
-    provider = TracerProvider(
-        resource=OtelResource.create({SERVICE_NAME: "tung-api"})
-    )
-    trace.set_tracer_provider(provider)
-
-    # create a JaegerExporter
-    exporter = JaegerExporter(
-        agent_host_name='localhost',
-        agent_port=6831,
-    )
-
-    # Create a BatchSpanProcessor and add the exporter to it
-    span_processor = BatchSpanProcessor(exporter)
-
-    # add to the tracer
-    provider.add_span_processor(span_processor)
-
-
-class CustomEncoder(flask.json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        return super().default(o)
-
-
-class Config:
-    RESTPLUS_JSON = {'cls': CustomEncoder}
-
-
-def setup_app():
-    flask_app = Flask(__name__)
-    flask_app.config.from_object(Config)
-    PrometheusMetrics(app=flask_app, group_by='url_rule', defaults_prefix='teko')
-    flask_app.json_encoder = CustomEncoder
-
-    FlaskInstrumentor().instrument_app(flask_app)
-
-    return flask_app
-
+from caching import new_cache_item
+from init_app import app, api
 
 total_item_counter = Counter(
     name='cache_counter', documentation='',
     labelnames=['content', 'type'],
 )
-
-init_jaeger()
-
-app = setup_app()
-
-api = flask_restplus.Api(app)
-
-next_counter = 0
-
-
-def before_req_func():
-    global next_counter
-    next_counter += 1
-
-
-app.before_request(before_req_func)
-
-
-@app.route('/', methods=['GET'])
-def home():
-    print("PRINT HOME")
-    return jsonify({'data': 'ABCD'})
 
 
 @dataclass
@@ -98,6 +29,9 @@ class User(msgspec.Struct):
     age: int
     roles: List[Role]
 
+    def get_id(self) -> int:
+        return self.user_id
+
 
 u1 = User(user_id=11, name='user01', age=80, roles=[Role(role_id=51)])
 u2 = User(user_id=12, name='user02', age=81, roles=[Role(role_id=52)])
@@ -111,9 +45,50 @@ def get_user(user_id):
     return jsonify({'name': 'username'})
 
 
+def get_users_from_db(id_list: List[int]) -> List[User]:
+    return [User(user_id=i, name=f'users:{i}', age=51, roles=[Role(role_id=50 + i)]) for i in id_list]
+
+
+new_user_item = new_cache_item(
+    cls=User, fill_func=get_users_from_db,
+    get_key=User.get_id,
+    default=User(user_id=0, name='', age=0, roles=[]),
+    key_name=lambda user_id: f'u2:{user_id}',
+)
+
+
+@app.route('/all-users', methods=['GET'])
+def get_all_users():
+    tracer = trace.get_tracer('my-tracer')
+
+    user_item = new_user_item()
+
+    with tracer.start_span('get-from-cache') as span:
+        id_list = list(range(100))
+        fn = user_item.get_multi(id_list)
+
+        id_list = list(range(300, 320))
+        fn2 = user_item.get_multi(id_list)
+
+        users = fn()
+        users2 = fn2()
+
+    with tracer.start_span('jsonify'):
+        obj = jsonify({
+            'users': users,
+            'users2': users2,
+        })
+
+    return obj
+
+
 @api.route('/customers')
 class Customers(Resource):
     def get(self):
+        tracer = trace.get_tracer('my-tracer')
+        with tracer.start_as_current_span('get-users'):
+            time.sleep(0.01)
+
         return {
             'users': [u1, u2]
         }

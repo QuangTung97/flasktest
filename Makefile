@@ -1,6 +1,9 @@
-.PHONY: run
+.PHONY: run lint
 
 run:
-	rm -r /tmp/flask
+	rm -rf /tmp/flask
 	mkdir -p /tmp/flask
-	prometheus_multiproc_dir=/tmp/flask gunicorn main:app --workers=2
+	prometheus_multiproc_dir=/tmp/flask gunicorn -k gevent main:app --workers=2
+
+lint:
+	mypy .
