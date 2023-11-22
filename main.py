@@ -17,13 +17,19 @@ total_item_counter = Counter(
     labelnames=['content', 'type'],
 )
 
+invalidate_events = []
+deleted_events = []
+
 
 def my_before_commit(sess):
-    print("DO Before COMMIT", sess)
+    print("DO Before COMMIT", sess, invalidate_events)
+    deleted_events.extend(invalidate_events)
+    invalidate_events.clear()
 
 
-def my_after_commit():
-    print("DO After COMMIT")
+def my_after_commit(obj):
+    print("DO After COMMIT", obj, deleted_events)
+    deleted_events.clear()
 
 
 db.event.listen(db.Session, "before_commit", my_before_commit)
@@ -88,6 +94,8 @@ def get_all_users():
     user_item = new_user_item()
 
     with tracer.start_span('get-from-cache') as span:
+        start = time.perf_counter_ns()
+
         id_list = list(range(1, NUM_KEYS + 1))
         fn = user_item.get_multi(id_list)
 
@@ -96,6 +104,9 @@ def get_all_users():
 
         users = fn()
         users2 = fn2()
+
+        d = (time.perf_counter_ns() - start) / 1000
+        print(f'GET from Cache: {d}us')
 
         span.set_attribute('hit_count', user_item.hit_count)
         span.set_attribute('fill_count', user_item.fill_count)
@@ -139,13 +150,17 @@ class Customers(Resource):
 
 @app.route('/create-users', methods=['POST'])
 def create_users():
-    u = UserModel(id=1002, username='username01', age=31)
+    u = UserModel(id=1001, username='username01', age=31)
     db.session.add(u)
     db.session.flush()
+
+    invalidate_events.append("EVENT1")
 
     tracer = trace.get_tracer('my-tracer')
     with tracer.start_span('COMMIT'):
         db.session.commit()
+
+    db.session.commit()
 
     return jsonify({'code': 'success'})
 

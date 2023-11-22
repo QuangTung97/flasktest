@@ -13,6 +13,7 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource as OtelResource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
 from prometheus_client import Counter
 from prometheus_flask_exporter import PrometheusMetrics  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base
@@ -21,8 +22,10 @@ from init_cache import init_cache_client
 
 
 def init_jaeger():
+    sampler = TraceIdRatioBased(1 / 100)
     provider = TracerProvider(
-        resource=OtelResource.create({SERVICE_NAME: "tung-api"})
+        resource=OtelResource.create({SERVICE_NAME: "tung-api"}),
+        sampler=sampler,
     )
     trace.set_tracer_provider(provider)
 
