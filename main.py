@@ -93,18 +93,26 @@ def get_all_users():
         span.set_attribute('fill_count', user_item.fill_count)
         span.set_attribute('bytes_read', user_item.bytes_read)
 
-    return jsonify({
-        'users': users,
-        'users2': users2,
-    })
+    with tracer.start_span('jsonify'):
+        obj = jsonify({
+            'users': users,
+            'users2': users2,
+        })
+    return obj
 
 
 @app.route('/db-users', methods=['GET'])
 def get_db_users():
-    obj = jsonify({
-        'users': get_users_from_db(list(range(1, 201))),
-        'users2': get_users_from_db(list(range(1, 201))),
-    })
+    users = get_users_from_db(list(range(1, 201)))
+    users2 = get_users_from_db(list(range(1, 201)))
+
+    tracer = trace.get_tracer('my-tracer')
+    with tracer.start_span('jsonify'):
+        obj = jsonify({
+            'users': users,
+            'users2': users2,
+        })
+
     return obj
 
 
