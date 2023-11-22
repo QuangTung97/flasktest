@@ -1,8 +1,8 @@
-import dataclasses
 from typing import Optional, Dict, Any
 
 import flask
 import flask_restplus
+import msgspec
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from memproxy import Pipeline, Item
@@ -41,8 +41,8 @@ def init_jaeger():
 
 class CustomEncoder(flask.json.JSONEncoder):
     def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
+        if isinstance(o, msgspec.Struct):
+            return msgspec.to_builtins(o)
         return super().default(o)
 
 

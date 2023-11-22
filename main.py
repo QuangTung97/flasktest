@@ -1,7 +1,7 @@
 import time
-from dataclasses import dataclass
 from typing import List
 
+import flask
 import msgspec
 from flask import jsonify
 from flask_restplus import Resource
@@ -22,10 +22,14 @@ def my_before_commit(sess):
     print("DO Before COMMIT", sess)
 
 
+def my_after_commit():
+    print("DO After COMMIT")
+
+
 db.event.listen(db.Session, "before_commit", my_before_commit)
+db.event.listen(db.Session, "after_commit", my_after_commit)
 
 
-@dataclass
 class User(msgspec.Struct):
     user_id: int
     name: str
@@ -73,6 +77,10 @@ new_user_item = new_cache_item(
     key_name=lambda user_id: f'u2:{user_id}',
 )
 
+NUM_KEYS = 50
+
+json_encoder = msgspec.json.Encoder()
+
 
 @app.route('/all-users', methods=['GET'])
 def get_all_users():
@@ -80,10 +88,10 @@ def get_all_users():
     user_item = new_user_item()
 
     with tracer.start_span('get-from-cache') as span:
-        id_list = list(range(1, 201))
+        id_list = list(range(1, NUM_KEYS + 1))
         fn = user_item.get_multi(id_list)
 
-        id_list2 = list(range(1, 201))
+        id_list2 = list(range(1, NUM_KEYS + 1))
         fn2 = user_item.get_multi(id_list2)
 
         users = fn()
@@ -94,17 +102,17 @@ def get_all_users():
         span.set_attribute('bytes_read', user_item.bytes_read)
 
     with tracer.start_span('jsonify'):
-        obj = jsonify({
+        data = json_encoder.encode({
             'users': users,
             'users2': users2,
         })
-    return obj
+    return flask.Response(response=data, content_type='application/json')
 
 
 @app.route('/db-users', methods=['GET'])
 def get_db_users():
-    users = get_users_from_db(list(range(1, 201)))
-    users2 = get_users_from_db(list(range(1, 201)))
+    users = get_users_from_db(list(range(1, NUM_KEYS + 1)))
+    users2 = get_users_from_db(list(range(1, NUM_KEYS + 1)))
 
     tracer = trace.get_tracer('my-tracer')
     with tracer.start_span('jsonify'):
@@ -123,14 +131,15 @@ class Customers(Resource):
         with tracer.start_as_current_span('get-users'):
             time.sleep(0.01)
 
-        return {
-            'users': [u1, u2]
-        }
+        data = json_encoder.encode({
+            'users': [u1, u2],
+        })
+        return flask.Response(response=data, content_type='application/json')
 
 
 @app.route('/create-users', methods=['POST'])
 def create_users():
-    u = UserModel(id=1001, username='username01', age=31)
+    u = UserModel(id=1002, username='username01', age=31)
     db.session.add(u)
     db.session.flush()
 
