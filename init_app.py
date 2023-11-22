@@ -4,15 +4,18 @@ from typing import Optional, Dict, Any
 import flask
 import flask_restplus
 from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
 from memproxy import Pipeline, Item
 from opentelemetry import trace
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource as OtelResource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_client import Counter
 from prometheus_flask_exporter import PrometheusMetrics  # type: ignore
+from sqlalchemy.ext.declarative import declarative_base
 
 from init_cache import init_cache_client
 
@@ -45,6 +48,8 @@ class CustomEncoder(flask.json.JSONEncoder):
 
 class Config:
     RESTPLUS_JSON = {'cls': CustomEncoder}
+    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:1@localhost:3306/bench?charset=utf8mb4'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 
 def setup_app():
@@ -61,6 +66,12 @@ def setup_app():
 init_jaeger()
 
 app = setup_app()
+
+Base = declarative_base()
+db = SQLAlchemy(model_class=Base)
+db.init_app(app)
+
+SQLAlchemyInstrumentor().instrument()
 
 api = flask_restplus.Api(app)
 
