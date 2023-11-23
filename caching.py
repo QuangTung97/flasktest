@@ -10,10 +10,10 @@ K = TypeVar('K')
 
 
 def new_codec(cls: Type[T]) -> ItemCodec[T]:
-    json_encoder = msgspec.msgpack.Encoder()
+    encoder = msgspec.msgpack.Encoder()
     decoder = msgspec.msgpack.Decoder(cls)
     return ItemCodec(
-        encode=json_encoder.encode,
+        encode=encoder.encode,
         decode=decoder.decode,
     )
 
@@ -22,15 +22,15 @@ def new_cache_item(
         cls: Type[T],
         fill_func: Callable[[List[K]], List[T]],
         get_key: Callable[[T], K],
-        default: T,
+        default: Callable[[], T],
         key_name: Callable[[K], str],
 ) -> Callable[[], Item[T, K]]:
     codec = new_codec(cls)
 
-    def new_func():
+    def new_func() -> Item[T, K]:
         filler = new_multi_get_filler(
             fill_func=fill_func, get_key_func=get_key,
-            default=default,
+            default=default(),
         )
         it = Item(
             pipe=get_pipeline(),

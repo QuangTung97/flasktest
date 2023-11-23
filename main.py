@@ -17,19 +17,21 @@ total_item_counter = Counter(
     labelnames=['content', 'type'],
 )
 
-invalidate_events = []
-deleted_events = []
+invalidate_keys: List[str] = []
+deleted_keys: List[str] = []
 
 
 def my_before_commit(sess):
-    print("DO Before COMMIT", sess, invalidate_events)
-    deleted_events.extend(invalidate_events)
-    invalidate_events.clear()
+    print("DO Before COMMIT", sess, invalidate_keys)
+    deleted_keys.extend(invalidate_keys)
+    invalidate_keys.clear()
 
 
 def my_after_commit(obj):
-    print("DO After COMMIT", obj, deleted_events)
-    deleted_events.clear()
+    print("DO After COMMIT", obj, deleted_keys)
+    # CALL Delete in Redis
+    # redis.delete_all(deleted_events)
+    deleted_keys.clear()
 
 
 db.event.listen(db.Session, "before_commit", my_before_commit)
@@ -79,11 +81,11 @@ def get_users_from_db(id_list: List[int]) -> List[User]:
 new_user_item = new_cache_item(
     cls=User, fill_func=get_users_from_db,
     get_key=User.get_id,
-    default=User(user_id=0, name='', age=0),
+    default=lambda: User(user_id=0, name='', age=0),
     key_name=lambda user_id: f'u2:{user_id}',
 )
 
-NUM_KEYS = 50
+NUM_KEYS = 100
 
 json_encoder = msgspec.json.Encoder()
 
@@ -112,6 +114,15 @@ def get_all_users():
         span.set_attribute('fill_count', user_item.fill_count)
         span.set_attribute('bytes_read', user_item.bytes_read)
 
+    with tracer.start_span('get-cache-2'):
+        user_item.get_multi([200])()
+
+    with tracer.start_span('get-cache-3'):
+        user_item.get_multi([300])()
+
+    with tracer.start_span('get-cache-4'):
+        user_item.get_multi([400])()
+
     with tracer.start_span('jsonify'):
         data = json_encoder.encode({
             'users': users,
@@ -124,6 +135,10 @@ def get_all_users():
 def get_db_users():
     users = get_users_from_db(list(range(1, NUM_KEYS + 1)))
     users2 = get_users_from_db(list(range(1, NUM_KEYS + 1)))
+
+    get_users_from_db([200])
+    get_users_from_db([300])
+    get_users_from_db([400])
 
     tracer = trace.get_tracer('my-tracer')
     with tracer.start_span('jsonify'):
@@ -154,7 +169,7 @@ def create_users():
     db.session.add(u)
     db.session.flush()
 
-    invalidate_events.append("EVENT1")
+    invalidate_keys.append("EVENT1")
 
     tracer = trace.get_tracer('my-tracer')
     with tracer.start_span('COMMIT'):
