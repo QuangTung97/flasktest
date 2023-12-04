@@ -14,9 +14,11 @@ from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
 from prometheus_flask_exporter import PrometheusMetrics  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base
 
+from init_cache import cleanup_caching
+
 
 def init_jaeger():
-    sampler = TraceIdRatioBased(1 / 100)
+    sampler = TraceIdRatioBased(100 / 100)
     provider = TracerProvider(
         resource=OtelResource.create({SERVICE_NAME: "tung-api"}),
         sampler=sampler,
@@ -59,16 +61,20 @@ def create_app():
     PrometheusMetrics(app=flask_app, group_by='url_rule', defaults_prefix='teko')
     flask_app.json_encoder = CustomEncoder
 
-    FlaskInstrumentor().instrument_app(flask_app, excluded_urls='metrics')
-
     db.init_app(flask_app)
+
+    @flask_app.teardown_appcontext
+    def teardown_context(_exc):
+        cleanup_caching()
 
     return flask_app
 
 
 init_jaeger()
+
 app = create_app()
 
+FlaskInstrumentor().instrument_app(app, excluded_urls='metrics')
 SQLAlchemyInstrumentor().instrument()
 
 api = flask_restplus.Api(app)

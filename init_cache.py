@@ -88,7 +88,6 @@ def add_item_stats(class_name: str, stat: Any):
 def cleanup_caching() -> None:
     stats = g.pop(STATS_KEY, None)
     if stats is not None:
-        print("UPDATE STATS=======")
         for cls, st in stats.items():
             cache_info_counter.labels(cls, 'hit').inc(st.hit_count)
             if st.fill_count > 0:
@@ -97,5 +96,4 @@ def cleanup_caching() -> None:
 
     pipe: Optional[Pipeline] = g.pop(PIPE_KEY, None)
     if pipe is not None:
-        print("FINISH PIPE=======")
         pipe.finish()
