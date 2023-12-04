@@ -3,7 +3,7 @@ from typing import TypeVar, List, Callable, Type
 import msgspec
 from memproxy import ItemCodec, Item, new_multi_get_filler
 
-from init_app import get_pipeline, add_item_stats
+from init_cache import get_pipeline, add_item_stats
 
 T = TypeVar('T')
 K = TypeVar('K')
