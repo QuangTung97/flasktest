@@ -82,7 +82,7 @@ new_user_item = new_cache_item(
     cls=User, fill_func=get_users_from_db,
     get_key=User.get_id,
     default=lambda: User(user_id=0, name='', age=0),
-    key_name=lambda user_id: f'u2:{user_id}',
+    key_name=lambda user_id: f'u1:{user_id}',
 )
 
 NUM_KEYS = 100
