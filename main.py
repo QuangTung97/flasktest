@@ -7,7 +7,7 @@ from flask import jsonify
 from flask_restplus import Resource
 from opentelemetry import trace
 from prometheus_client import Counter
-from sqlalchemy import Column, Integer, VARCHAR
+from sqlalchemy import Column, Integer, VARCHAR, event
 
 from caching import new_cache_item
 from init_app import app, api, db
@@ -21,21 +21,24 @@ invalidate_keys: List[str] = []
 deleted_keys: List[str] = []
 
 
+@event.listens_for(db.session, 'before_commit')
 def my_before_commit(sess):
     print("DO Before COMMIT", sess, invalidate_keys)
     deleted_keys.extend(invalidate_keys)
     invalidate_keys.clear()
 
 
+@event.listens_for(db.session, 'before_commit')
+def my_before_commit_second(_sess):
+    print("DO Before COMMIT SECOND=======")
+
+
+@event.listens_for(db.session, 'after_commit')
 def my_after_commit(obj):
     print("DO After COMMIT", obj, deleted_keys)
     # CALL Delete in Redis
     # redis.delete_all(deleted_events)
     deleted_keys.clear()
-
-
-db.event.listen(db.Session, "before_commit", my_before_commit)
-db.event.listen(db.Session, "after_commit", my_after_commit)
 
 
 class User(msgspec.Struct):
