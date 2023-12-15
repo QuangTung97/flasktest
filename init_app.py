@@ -18,7 +18,7 @@ from init_cache import cleanup_caching
 
 
 def init_jaeger():
-    sampler = TraceIdRatioBased(5 / 100)
+    sampler = TraceIdRatioBased(100 / 100)
     provider = TracerProvider(
         resource=OtelResource.create({SERVICE_NAME: "tung-api"}),
         sampler=sampler,

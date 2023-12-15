@@ -1,8 +1,8 @@
-import time
 from typing import List
 
 import flask
 import msgspec
+import time
 from flask import jsonify
 from flask_restplus import Resource
 from opentelemetry import trace
@@ -46,9 +46,6 @@ class User(msgspec.Struct):
     name: str
     age: int
 
-    def get_id(self) -> int:
-        return self.user_id
-
 
 u1 = User(user_id=11, name='user01', age=80)
 u2 = User(user_id=12, name='user02', age=81)
@@ -83,7 +80,7 @@ def get_users_from_db(id_list: List[int]) -> List[User]:
 
 new_user_item = new_cache_item(
     cls=User, fill_func=get_users_from_db,
-    get_key=User.get_id,
+    get_key=lambda u: u.id,
     default=lambda: User(user_id=0, name='', age=0),
     key_name=lambda user_id: f'u1:{user_id}',
 )
@@ -168,9 +165,11 @@ class Customers(Resource):
 
 @app.route('/create-users', methods=['POST'])
 def create_users():
-    u = UserModel(id=1001, username='username01', age=31)
-    db.session.add(u)
-    db.session.flush()
+    u = db.session.query(UserModel).filter(UserModel.id == 1001).first()
+    if not u:
+        u = UserModel(id=1001, username='username01', age=31)
+        db.session.add(u)
+        db.session.flush()
 
     invalidate_keys.append("EVENT1")
 
